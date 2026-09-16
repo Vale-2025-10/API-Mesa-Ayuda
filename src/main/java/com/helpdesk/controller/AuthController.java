@@ -59,20 +59,35 @@ public class AuthController {
         return ResponseEntity.ok(new AuthResponse(jwt, refreshToken.getToken()));
     }
 
-    @PostMapping("/refresh")
+   @PostMapping("/refresh")
     public ResponseEntity<?> refreshToken(@Valid @RequestBody RefreshRequest request) {
+
         String requestRefreshToken = request.getRefreshToken();
 
-        return refreshTokenService.findByToken(requestRefreshToken)
-                .map(refreshTokenService::verifyExpiration)
-                .map(RefreshToken::getUsuario)
-                .map(usuario -> {
-                    String token = jwtUtils.generateJwtToken(usuario.getEmail(), usuario.getRol().name());
-                    return ResponseEntity.ok(new AuthResponse(token, requestRefreshToken));
-                })
-                .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Refresh Token invalido o revocado."));
-    }
+        var refreshTokenOptional =
+            refreshTokenService.findByToken(requestRefreshToken);
 
+        if (refreshTokenOptional.isEmpty()) {
+            return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body("Refresh Token invalido o revocado.");
+        }
+
+        RefreshToken refreshToken =
+            refreshTokenService.verifyExpiration(refreshTokenOptional.get());
+
+        Usuario usuario = refreshToken.getUsuario();
+
+        String token = jwtUtils.generateJwtToken(
+            usuario.getEmail(),
+            usuario.getRol().name()
+        );
+
+        AuthResponse response =
+            new AuthResponse(token, requestRefreshToken);
+
+        return ResponseEntity.ok(response);
+    }
     @PostMapping("/logout")
     public ResponseEntity<?> logout(@Valid @RequestBody RefreshRequest request) {
         refreshTokenService.revocarToken(request.getRefreshToken());
